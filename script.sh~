@@ -1,0 +1,7 @@
+#!/bin/bash
+
+./svm-scale svm_train.txt>train_scale
+./svm-scale svm_test.txt>test_scale
+./svm-train -s 3 -t 2 train_scale
+./svm-predict test_scale train_scale.model out1.txt
+./svm-predict train_scale train_scale.model out2.txt
