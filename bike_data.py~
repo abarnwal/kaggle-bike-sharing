@@ -1,0 +1,94 @@
+#code for forecasting bike demand 
+
+import pandas as pd
+import numpy as np
+from datetime import datetime
+from sklearn import cross_validation
+from sklearn.ensemble import RandomForestRegressor
+
+
+#split datetime column into date, day and hour. Add them to dataframe as separate columns
+def filter(df):
+    	i = 0
+    	for timestamp in df['datetime']:
+        	date_object = datetime.strptime(timestamp.split()[0], '%Y-%m-%d')
+        	#only interested in time in hours
+       		hour = timestamp.split()[1][:2]
+        	#map date to nth day of the week. 0 is monday.
+	        day = datetime.date(date_object).weekday()
+	        #map year to 1 or 2
+        	year_dict = {2011:1, 2012:2}
+	        year = year_dict[date_object.year]
+        
+	        df.loc[i, 'day'] = day
+	        df.loc[i, 'hour'] = hour
+	        df.loc[i, 'year'] = year
+	        i += 1
+	return df
+
+def main():	
+	#import train.csv and play with it
+	bike_df = pd.read_csv('train.csv')
+	bike_df = filter(bike_df)
+	bike_df = bike_df[['datetime', 'year', 'day', 'hour', 'season', 'holiday', 'workingday', 'weather', 'temp', 'atemp', 'humidity', 'windspeed', 'casual', 'registered', 'count']]
+	#print bike_df.head()
+
+
+
+	#import test.csv and play with it
+	test_df = pd.read_csv('test.csv')
+	test_df = filter(test_df)
+	test_df = test_df[['datetime', 'year', 'day', 'hour', 'season', 'holiday', 'workingday', 'weather', 'temp', 'atemp', 'humidity', 'windspeed']]
+	#print test_df.head()
+
+
+	forest = RandomForestRegressor(n_estimators=500, min_samples_split=3, oob_score=True)
+
+	#fit to number of casual bikers, commented row is all 9, actual has columns removed depending on importance
+	#['year', 'day', 'hour', 'season', 'holiday', 'workingday', 'weather', 'temp', 'atemp', 'humidity', 'windspeed']
+	cas_cols_fit = ['year', 'day', 'hour', 'season', 'holiday', 'workingday', 'weather', 'temp', 'atemp', 'humidity', 'windspeed']
+
+	#cross validation of casual bikers
+	scores = cross_validation.cross_val_score(forest, bike_df[cas_cols_fit], bike_df['casual'], cv=5)
+	print scores
+
+	print("Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std()*2))
+
+	casual = forest.fit(bike_df[cas_cols_fit], bike_df['casual'] )
+	print casual.feature_importances_
+
+
+	#predict casual bikers
+	test_df['casual'] = forest.predict(test_df[cas_cols_fit])
+	print test_df.head()
+
+
+	#fit to number of registered bikers, commented row is all 9, actual has columns removed depending on importance
+	#['year', 'day', 'hour', 'season', 'holiday', 'workingday', 'weather', 'temp', 'atemp', 'humidity', 'windspeed']
+	reg_cols_fit = ['year', 'day', 'hour', 'season', 'holiday', 'workingday', 'weather', 'temp', 'atemp', 'humidity', 'windspeed']
+
+	#cross validation of registered bikers
+	scores = cross_validation.cross_val_score(forest, bike_df[reg_cols_fit], bike_df['registered'], cv=5)
+	print scores
+	print("Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std()*2))
+
+	registered = forest.fit(bike_df[reg_cols_fit], bike_df['registered'] )
+	print registered.feature_importances_
+
+	#predict registered bikers
+	test_df['registered'] = forest.predict(test_df[reg_cols_fit])
+	test_df['count'] = test_df['casual'] + test_df['registered']
+
+	test_df['count'] = test_df['count'].apply(np.round)
+
+
+	#generate submission dataframe and csv file
+	df_out = test_df[['datetime', 'count']]
+	df_out.to_csv('submission.csv', index=False)
+	print df_out.head()
+
+if __name__ == '__main__':
+	main()
+
+
+
